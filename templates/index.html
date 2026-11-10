@@ -281,6 +281,7 @@ let selectedGameIndex = null;
 // ── API helpers ──────────────────────────────────────────────
 async function apiFetch(url, opts = {}) {
   const r = await fetch(url, {
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/json' },
     ...opts
   });

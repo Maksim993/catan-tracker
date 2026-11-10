@@ -1,7 +1,7 @@
 """Local sandbox: python tools/preview.py [--load-live]. No third-party dependencies."""
 import argparse
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -71,7 +71,7 @@ def main():
             self.send({"ok": True})
 
     print(f"Local sandbox: http://127.0.0.1:{args.port}", flush=True)
-    HTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
