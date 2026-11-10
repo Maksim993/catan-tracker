@@ -507,6 +507,9 @@ function renderTotalStats() {
     const exp = PROBS[n]/TOTAL_COMBOS*totalRollsCount;
     return exp > 0 ? +((sumRolls[n]-exp)/exp*100).toFixed(1) : 0;
   });
+  const deviationStep = Math.max(1, Math.ceil((Math.max(0, ...deviationData) - Math.min(0, ...deviationData)) / 6));
+  const deviationMin = Math.floor(Math.min(0, ...deviationData) / deviationStep) * deviationStep;
+  const deviationMax = Math.max(deviationMin + deviationStep, Math.ceil(Math.max(0, ...deviationData) / deviationStep) * deviationStep);
   if (deviationChart) deviationChart.destroy();
   deviationChart = new Chart(document.getElementById('deviationChart'), {
     type:'bar',
@@ -518,11 +521,20 @@ function renderTotalStats() {
       }]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false, animation:false,
       plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>(ctx.raw>0?'+':'')+ctx.raw+'%'}} },
       scales:{
         x:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#5C3A1E'}},
-        y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#5C3A1E',callback:v=>v+'%'}}
+        y:{
+          position:'left', min:deviationMin, max:deviationMax, afterFit:fitChartAxis,
+          grid:{color:'rgba(0,0,0,0.06)'},
+          ticks:{color:'#5C3A1E',stepSize:deviationStep,callback:v=>v+'%'}
+        },
+        yPct:{
+          position:'right', min:deviationMin, max:deviationMax, afterFit:fitChartAxis,
+          grid:{drawOnChartArea:false},
+          ticks:{color:'#8B5E3C',stepSize:deviationStep,callback:v=>v+'%'}
+        }
       }
     }
   });
@@ -566,17 +578,21 @@ function renderWinners() {
   });
 }
 
+// Equal gutters keep the sums aligned across the two statistics charts.
+function fitChartAxis(scale) { scale.width = 64; }
+
 function chartOpts(total, maxCount) {
   // Both axes use the same count range; only the right-hand labels are percentages.
   const stepSize = Math.max(1, Math.ceil(maxCount / 6));
   const axisMax = (Math.floor(maxCount / stepSize) + 1) * stepSize;
   return {
-    responsive:true, maintainAspectRatio:false,
+    responsive:true, maintainAspectRatio:false, animation:false,
     plugins:{legend:{display:true,labels:{color:'#5C3A1E',font:{family:'Georgia'}}}},
     scales:{
       x:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#5C3A1E'}},
       // left axis: raw counts
       y:{
+        afterFit:fitChartAxis,
         min:0, max:axisMax,
         grid:{color:'rgba(0,0,0,0.06)'},
         ticks:{color:'#5C3A1E', stepSize},
@@ -584,6 +600,7 @@ function chartOpts(total, maxCount) {
       },
       // right axis: percentage
       yPct:{
+        afterFit:fitChartAxis,
         min:0, max:axisMax,
         position:'right',
         grid:{drawOnChartArea:false},
