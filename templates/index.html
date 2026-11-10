@@ -82,6 +82,8 @@
     border-radius: 6px; background: white; color: var(--ink); outline: none; transition: border-color 0.2s;
   }
   .dice-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(230,126,34,0.25); }
+  .dice-input { appearance: textfield; -moz-appearance: textfield; }
+  .dice-input::-webkit-inner-spin-button, .dice-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .prob-bar-wrap { width: 36px; height: 6px; background: var(--parchment-dark); border-radius: 3px; overflow: hidden; }
   .prob-bar { height: 100%; background: linear-gradient(90deg, var(--wood-mid), var(--accent)); border-radius: 3px; }
   .prob-bar.seven { background: linear-gradient(90deg, var(--brick), #E74C3C); }
@@ -193,6 +195,7 @@
     <div class="card">
       <h2>🎲 Введи результаты игры</h2>
       <div class="dice-grid" id="diceInputGrid"></div>
+      <p id="diceInputHelp" style="font-size:0.8rem;color:var(--ink-light)">← / → — перейти к соседней сумме · Tab — следующее поле. Число выделяется автоматически: просто вводи новое.</p>
       <div class="form-row">
         <div class="form-group">
           <label>Победитель</label>
@@ -367,11 +370,25 @@ function initDiceGrid() {
     const isSeven = n === 7, isHot = n === 6 || n === 8;
     cell.innerHTML = `
       <div class="dice-label ${isSeven?'seven':isHot?'hot':''}">${n}</div>
-      <input type="number" class="dice-input" id="roll_${n}" min="0" max="999" value="0">
+      <input type="number" class="dice-input" id="roll_${n}" min="0" max="999" step="1" inputmode="numeric" value="0" aria-label="Количество выпадений суммы ${n}" aria-describedby="diceInputHelp">
       <div class="prob-bar-wrap" title="${(prob*100).toFixed(1)}% теор.">
         <div class="prob-bar ${isSeven?'seven':''}" style="width:${prob/0.1667*100}%"></div>
       </div>`;
     grid.appendChild(cell);
+    const input = cell.querySelector('input');
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('click', () => input.select());
+    input.addEventListener('keydown', event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const next = n + (event.key === 'ArrowRight' ? 1 : -1);
+      const target = document.getElementById('roll_' + next);
+      if (target) {
+        target.focus();
+        target.select();
+      }
+    });
   }
 }
 
@@ -436,7 +453,7 @@ function selectGame(i) {
           yAxisID:'y', order:1 }
       ]
     },
-    options: chartOpts(g.total)
+    options: chartOpts(g.total, Math.max(...data, ...theory))
   });
   document.getElementById('selectedGameCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -482,7 +499,7 @@ function renderTotalStats() {
           yAxisID:'y', order:1 }
       ]
     },
-    options: chartOpts(totalRollsCount)
+    options: chartOpts(totalRollsCount, Math.max(...data, ...theory))
   });
 
   const deviationData = labels.map(n => {
@@ -548,7 +565,10 @@ function renderWinners() {
   });
 }
 
-function chartOpts(total) {
+function chartOpts(total, maxCount) {
+  // Both axes use the same count range; only the right-hand labels are percentages.
+  const stepSize = Math.max(1, Math.ceil(maxCount / 6));
+  const axisMax = (Math.floor(maxCount / stepSize) + 1) * stepSize;
   return {
     responsive:true, maintainAspectRatio:false,
     plugins:{legend:{display:true,labels:{color:'#5C3A1E',font:{family:'Georgia'}}}},
@@ -556,23 +576,24 @@ function chartOpts(total) {
       x:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#5C3A1E'}},
       // left axis: raw counts
       y:{
+        min:0, max:axisMax,
         grid:{color:'rgba(0,0,0,0.06)'},
-        ticks:{color:'#5C3A1E'},
+        ticks:{color:'#5C3A1E', stepSize},
         position:'left'
       },
       // right axis: percentage
       yPct:{
+        min:0, max:axisMax,
         position:'right',
         grid:{drawOnChartArea:false},
         ticks:{
+          stepSize,
           color:'#8B5E3C',
           callback: v => {
-            if (!total) return '';
+            if (!total) return '0.0%';
             return (v / total * 100).toFixed(1) + '%';
           }
         },
-        // mirror the left axis range so ticks align perfectly
-        min:0,
       }
     }
   };
