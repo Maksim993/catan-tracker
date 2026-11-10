@@ -205,11 +205,10 @@
     <div class="card">
       <h2>🎲 Введи результаты игры</h2>
       <div class="dice-grid" id="diceInputGrid"></div>
-      <p id="diceInputHelp" style="font-size:0.8rem;color:var(--ink-light)">← / → — перейти к соседней сумме · Tab — следующее поле. Число выделяется автоматически: просто вводи новое.</p>
       <div class="form-row">
         <div class="form-group">
           <label for="winnerInput">Победитель</label>
-          <select id="winnerInput" style="width:180px">
+          <select id="winnerInput" style="width:220px">
             <option value="" selected disabled>Выбери победителя</option>
             <option>Папа</option><option>Мама</option><option>Софа</option><option>Максим</option>
           </select>
@@ -415,7 +414,7 @@ function initDiceGrid() {
     const isSeven = n === 7, isHot = n === 6 || n === 8;
     cell.innerHTML = `
       <div class="dice-label ${isSeven?'seven':isHot?'hot':''}">${n}</div>
-      <input type="number" class="dice-input" id="roll_${n}" min="0" max="999" step="1" inputmode="numeric" value="0" aria-label="Количество выпадений суммы ${n}" aria-describedby="diceInputHelp">
+      <input type="number" class="dice-input" id="roll_${n}" min="0" max="999" step="1" inputmode="numeric" value="0" aria-label="Количество выпадений суммы ${n}">
       <div class="prob-bar-wrap" title="${(prob*100).toFixed(1)}% теор.">
         <div class="prob-bar ${isSeven?'seven':''}" style="width:${prob/0.1667*100}%"></div>
       </div>`;
