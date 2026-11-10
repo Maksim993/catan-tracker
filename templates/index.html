@@ -114,6 +114,16 @@
   .stat-card .val { font-size: 2rem; font-weight: bold; color: var(--wood-light); display: block; }
   .stat-card .lbl { font-size: 0.75rem; color: rgba(196,147,90,0.7); margin-top: 2px; display: block; }
   .chart-wrap { position: relative; width: 100%; height: 300px; }
+  .stats-note { font-size:0.85rem; color:var(--ink-light); line-height:1.6; margin-bottom:1rem; }
+  .record-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
+  .record { border:1px solid var(--wood-light); border-radius:8px; background:#FFFBF3; padding:1rem; line-height:1.6; }
+  .record strong { display:block; color:var(--wood-dark); font-size:1.1rem; }
+  .record small { display:block; color:var(--ink-light); }
+  .heatmap-wrap { overflow-x:auto; }
+  .heatmap { border-collapse:separate; border-spacing:3px; width:100%; min-width:650px; font-size:0.8rem; text-align:center; }
+  .heatmap th { padding:8px 4px; color:var(--wood-dark); }
+  .heatmap td { padding:9px 4px; border-radius:4px; font-variant-numeric:tabular-nums; }
+  .heatmap th:first-child { text-align:left; white-space:nowrap; }
   .game-item {
     display: flex; align-items: center; gap: 1rem; padding: 0.85rem 1rem;
     border-radius: 8px; border: 1.5px solid var(--parchment-dark);
@@ -198,8 +208,11 @@
       <p id="diceInputHelp" style="font-size:0.8rem;color:var(--ink-light)">← / → — перейти к соседней сумме · Tab — следующее поле. Число выделяется автоматически: просто вводи новое.</p>
       <div class="form-row">
         <div class="form-group">
-          <label>Победитель</label>
-          <input type="text" id="winnerInput" placeholder="Имя победителя" style="width:180px">
+          <label for="winnerInput">Победитель</label>
+          <select id="winnerInput" style="width:180px">
+            <option value="" selected disabled>Выбери победителя</option>
+            <option>Папа</option><option>Мама</option><option>Софа</option><option>Максим</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Количество игроков</label>
@@ -249,6 +262,29 @@
       <p style="font-size:0.82rem;color:var(--ink-light);margin-bottom:1rem">🟠 Выпадало чаще теории · 🔵 Реже теории</p>
       <div class="chart-wrap" style="height:240px"><canvas id="deviationChart"></canvas></div>
     </div>
+    <div id="extraStats" hidden>
+      <div class="card">
+        <h2>📚 Партии в цифрах</h2>
+        <div class="stat-row" id="gameLengthStats"></div>
+        <p class="stats-note">Длина партии — количество бросков, записанных за игру.</p>
+        <div class="chart-wrap"><canvas id="lengthChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>🔎 Самые необычные выпадения</h2>
+        <p class="stats-note">Три самых сильных отклонения для отдельной суммы за одну игру. Сравнение учитывает длину партии и вероятность суммы: редкие двойки и частые семёрки оцениваются по-разному.</p>
+        <div class="record-grid" id="anomalyRecords"></div>
+      </div>
+      <div class="card">
+        <h2>🎲 Семёрка от игры к игре</h2>
+        <p class="stats-note">Доля семёрок в каждой партии. Пунктир — теоретические 16,7%.</p>
+        <div class="chart-wrap" style="height:260px"><canvas id="sevenChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>🗓 Карта выпадений по играм</h2>
+        <p class="stats-note">В ячейках — количество выпадений. 🟠 Чаще теории · 🔵 Реже теории. Интенсивность цвета показывает разницу долей, а не количества бросков. Наведи на ячейку для подробностей.</p>
+        <div class="heatmap-wrap" id="gameHeatmap"></div>
+      </div>
+    </div>
   </div>
 
   <!-- WINNERS -->
@@ -277,6 +313,7 @@ const COLORS = {
 let games = [];
 let gameChart = null, totalChart = null, deviationChart = null, winnersChart = null;
 let selectedGameIndex = null;
+let lengthChart = null, sevenChart = null;
 
 // ── API helpers ──────────────────────────────────────────────
 async function apiFetch(url, opts = {}) {
@@ -460,7 +497,10 @@ function selectGame(i) {
 }
 
 function renderTotalStats() {
+  renderExtraStats();
   if (!games.length) {
+    [totalChart, deviationChart].forEach(chart => { if (chart) chart.destroy(); });
+    totalChart = deviationChart = null;
     document.getElementById('totalStatsRow').innerHTML = '<div class="empty-msg" style="grid-column:1/-1">Нет данных</div>';
     return;
   }
@@ -538,6 +578,75 @@ function renderTotalStats() {
       }
     }
   });
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderExtraStats() {
+  [lengthChart, sevenChart].forEach(chart => { if (chart) chart.destroy(); });
+  lengthChart = sevenChart = null;
+  const ordered = games.filter(g => g.total > 0).slice().sort((a,b) => a.date.localeCompare(b.date) || a.id-b.id);
+  document.getElementById('extraStats').hidden = !ordered.length;
+  if (!ordered.length) return;
+  const fmt = value => value.toLocaleString('ru-RU', {maximumFractionDigits:1});
+  const totals = ordered.map(g => g.total);
+  const average = totals.reduce((s,n) => s+n, 0) / totals.length;
+  const sorted = totals.slice().sort((a,b) => a-b);
+  const middle = Math.floor(sorted.length/2);
+  const median = sorted.length%2 ? sorted[middle] : (sorted[middle-1]+sorted[middle])/2;
+  const shortest = ordered.reduce((a,b) => a.total <= b.total ? a : b);
+  const longest = ordered.reduce((a,b) => a.total >= b.total ? a : b);
+  document.getElementById('gameLengthStats').innerHTML = [
+    [fmt(average), 'Бросков за игру в среднем'], [fmt(median), 'Медиана бросков за игру'],
+    [shortest.total, 'Самая короткая · '+formatDate(shortest.date)],
+    [longest.total, 'Самая длинная · '+formatDate(longest.date)]
+  ].map(([value,label]) => `<div class="stat-card"><span class="val">${value}</span><span class="lbl">${label}</span></div>`).join('');
+  const labels = ordered.map(g => formatDate(g.date));
+  const options = percent => ({
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:'index', intersect:false},
+    plugins:{legend:{labels:{color:'#5C3A1E'}}, tooltip:{callbacks:{
+      afterTitle:items => 'Победитель: '+ordered[items[0].dataIndex].winner,
+      label:ctx => ctx.dataset.label+': '+fmt(ctx.raw)+(percent?'%':'')
+    }}},
+    scales:{x:{grid:{display:false},ticks:{color:'#5C3A1E',maxRotation:45,autoSkip:true,maxTicksLimit:12}},
+      y:{beginAtZero:true,afterFit:fitChartAxis,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#5C3A1E',callback:v=>fmt(v)+(percent?'%':'')}}}
+  });
+  lengthChart = new Chart(document.getElementById('lengthChart'), {
+    type:'bar', data:{labels, datasets:[
+      {label:'Бросков за игру',data:totals,backgroundColor:'#C4935A',borderRadius:5,order:2},
+      {type:'line',label:'Среднее',data:totals.map(()=>average),borderColor:'#27AE60',borderDash:[6,4],pointRadius:0,borderWidth:2,order:1}
+    ]}, options:options(false)
+  });
+  sevenChart = new Chart(document.getElementById('sevenChart'), {
+    type:'line', data:{labels,datasets:[
+      {label:'Семёрки',data:ordered.map(g=>(g.rolls[7]||0)/g.total*100),borderColor:'#C0392B',backgroundColor:'rgba(192,57,43,0.08)',fill:true,pointRadius:4,tension:0.15},
+      {label:'Теория',data:totals.map(()=>100/6),borderColor:'#27AE60',borderDash:[6,4],pointRadius:0,borderWidth:2}
+    ]}, options:options(true)
+  });
+  const anomalies = [];
+  ordered.forEach(g => {
+    for (let n=2;n<=12;n++) {
+      const p=PROBS[n]/36, expected=g.total*p, actual=g.rolls[n]||0;
+      anomalies.push({g,n,actual,expected,score:Math.abs(actual-expected)/Math.sqrt(g.total*p*(1-p))});
+    }
+  });
+  anomalies.sort((a,b)=>b.score-a.score);
+  document.getElementById('anomalyRecords').innerHTML = anomalies.slice(0,3).map((a,i)=>`
+    <div class="record"><small>№${i+1} · ${formatDate(a.g.date)} · ${escapeHTML(a.g.winner)}</small>
+    <strong>Сумма ${a.n}</strong>
+    Выпадений: ${a.actual}. Ожидалось ${fmt(a.expected)} из ${a.g.total} бросков.
+    <small>На ${fmt(Math.abs(a.actual-a.expected))} ${a.actual>=a.expected?'больше':'меньше'} ожидания.</small></div>`).join('');
+  document.getElementById('gameHeatmap').innerHTML = `<table class="heatmap"><caption class="stats-note">Все ${ordered.length} игр по датам</caption><thead><tr><th scope="col">Игра</th>${Array.from({length:11},(_,i)=>`<th scope="col">${i+2}</th>`).join('')}</tr></thead><tbody>${ordered.map(g=>
+    `<tr><th scope="row" title="${escapeHTML(g.winner)} · ${g.total} бросков">${formatDate(g.date)}</th>${Array.from({length:11},(_,i)=>{
+      const n=i+2, actual=g.rolls[n]||0, expected=g.total*PROBS[n]/36;
+      const difference=(actual/g.total-PROBS[n]/36)*100;
+      const alpha=Math.min(0.75,Math.abs(difference)/12*0.75);
+      const color=difference>=0?'230,126,34':'41,128,185';
+      return `<td style="background:rgba(${color},${alpha})" title="Сумма ${n}: ${actual} из ${g.total} (${fmt(actual/g.total*100)}%); ожидалось ${fmt(expected)} (${fmt(PROBS[n]/36*100)}%)">${actual}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
 function renderWinners() {
