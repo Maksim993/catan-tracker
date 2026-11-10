@@ -275,8 +275,15 @@
         <div class="record-grid" id="anomalyRecords"></div>
       </div>
       <div class="card">
-        <h2>🎲 Семёрка от игры к игре</h2>
-        <p class="stats-note">Доля семёрок в каждой партии. Пунктир — теоретические 16,7%.</p>
+        <h2>🎲 Выпадения от игры к игре</h2>
+        <div class="form-group" style="max-width:180px;margin-bottom:1rem">
+          <label for="historySumInput">Сумма на кубиках</label>
+          <select id="historySumInput" onchange="renderExtraStats()">
+            <option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+            <option selected>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option>
+          </select>
+        </div>
+        <p class="stats-note" id="historySumNote"></p>
         <div class="chart-wrap" style="height:260px"><canvas id="sevenChart"></canvas></div>
       </div>
       <div class="card">
@@ -620,10 +627,13 @@ function renderExtraStats() {
       {type:'line',label:'Среднее',data:totals.map(()=>average),borderColor:'#27AE60',borderDash:[6,4],pointRadius:0,borderWidth:2,order:1}
     ]}, options:options(false)
   });
+  const selectedSum = Number(document.getElementById('historySumInput').value);
+  const theoreticalPct = PROBS[selectedSum]/TOTAL_COMBOS*100;
+  document.getElementById('historySumNote').textContent = `Доля выпадений суммы ${selectedSum} в каждой партии. Пунктир — теоретические ${fmt(theoreticalPct)}%.`;
   sevenChart = new Chart(document.getElementById('sevenChart'), {
     type:'line', data:{labels,datasets:[
-      {label:'Семёрки',data:ordered.map(g=>(g.rolls[7]||0)/g.total*100),borderColor:'#C0392B',backgroundColor:'rgba(192,57,43,0.08)',fill:true,pointRadius:4,tension:0.15},
-      {label:'Теория',data:totals.map(()=>100/6),borderColor:'#27AE60',borderDash:[6,4],pointRadius:0,borderWidth:2}
+      {label:`Сумма ${selectedSum}`,data:ordered.map(g=>(g.rolls[selectedSum]||0)/g.total*100),borderColor:'#C0392B',backgroundColor:'rgba(192,57,43,0.08)',fill:true,pointRadius:4,tension:0.15},
+      {label:'Теория',data:totals.map(()=>theoreticalPct),borderColor:'#27AE60',borderDash:[6,4],pointRadius:0,borderWidth:2}
     ]}, options:options(true)
   });
   const anomalies = [];
