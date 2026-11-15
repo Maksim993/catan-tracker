@@ -44,6 +44,8 @@ def main():
                 html = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
                 banner = '<div style="background:#FFF3CD;color:#5C3A1E;padding:12px;text-align:center;font:14px sans-serif">Предпросмотр · Игры сохраняются только на этом компьютере. Семейная база Supabase не изменяется.</div>'
                 self.send(html.replace("<body>", "<body>" + banner), content_type="text/html; charset=utf-8")
+            elif self.path in ("/static/features.js", "/static/unusual-worker.js"):
+                self.send((ROOT / self.path.lstrip("/")).read_text(encoding="utf-8"), content_type="text/javascript; charset=utf-8")
             elif self.path == "/api/games":
                 self.send(json.loads(DATA.read_text(encoding="utf-8")))
             else:

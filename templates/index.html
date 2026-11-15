@@ -114,6 +114,14 @@
   .stat-card .val { font-size: 2rem; font-weight: bold; color: var(--wood-light); display: block; }
   .stat-card .lbl { font-size: 0.75rem; color: rgba(196,147,90,0.7); margin-top: 2px; display: block; }
   .chart-wrap { position: relative; width: 100%; height: 300px; }
+  .tabs { flex-wrap:wrap; }
+  .tab { min-width:120px; }
+  .live-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(85px,1fr)); gap:10px; margin:1rem 0; }
+  .live-roll { min-height:82px; background:#FFFBF3; border:2px solid var(--wood-light); border-radius:10px; color:var(--ink); cursor:pointer; font: bold 1.6rem Georgia; touch-action:manipulation; }
+  .live-roll:active { background:var(--parchment-dark); }
+  .live-roll small { display:block; font-size:0.8rem; font-weight:normal; margin-top:5px; }
+  .live-history { display:flex; flex-wrap:wrap; gap:5px; margin:1rem 0; min-height:30px; }
+  .live-history span { background:var(--parchment-dark); border-radius:5px; padding:5px 10px; }
   .stats-note { font-size:0.85rem; color:var(--ink-light); line-height:1.6; margin-bottom:1rem; }
   .record-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
   .record { border:1px solid var(--wood-light); border-radius:8px; background:#FFFBF3; padding:1rem; line-height:1.6; }
@@ -195,6 +203,7 @@
 <div class="main-container">
   <div class="tabs">
     <button class="tab active" onclick="showTab('add')">➕ Новая игра</button>
+    <button class="tab" onclick="showTab('live')">🔴 Игра сейчас</button>
     <button class="tab" onclick="showTab('games')">🎮 Игры</button>
     <button class="tab" onclick="showTab('total')">📊 Статистика</button>
     <button class="tab" onclick="showTab('winners')">🏆 Победители</button>
@@ -237,6 +246,25 @@
     </div>
   </div>
 
+  <div id="tab-live" class="section">
+    <div class="card">
+      <h2>🔴 Игра сейчас</h2>
+      <p class="stats-note" id="liveDraftNote">Нажимай выпавшую сумму. Черновик автоматически сохраняется на этом устройстве.</p>
+      <div class="stat-row" id="liveStats" aria-live="polite"></div>
+      <div class="live-grid" id="liveRollButtons"></div>
+      <button class="btn" id="liveUndo" onclick="undoLiveRoll()">↶ Отменить последний бросок</button>
+      <button class="btn" id="liveReset" onclick="resetLiveGame()">Начать заново</button>
+      <div class="live-history" id="liveHistory" aria-label="Последние 20 бросков"></div>
+      <div class="chart-wrap"><canvas id="liveChart"></canvas></div>
+      <div class="form-row">
+        <div class="form-group"><label for="liveWinner">Победитель</label><select id="liveWinner" style="width:220px" onchange="persistLiveGame()"><option value="" disabled selected>Выбери победителя</option><option>Папа</option><option>Мама</option><option>Софа</option><option>Максим</option></select></div>
+        <div class="form-group"><label for="livePlayers">Количество игроков</label><select id="livePlayers" onchange="persistLiveGame()"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+        <div class="form-group"><label for="liveDate">Дата игры</label><input type="date" id="liveDate" onchange="persistLiveGame()"></div>
+        <button class="btn btn-primary" id="liveSave" onclick="saveLiveGame()">💾 Завершить и сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GAMES LIST -->
   <div id="tab-games" class="section">
     <div class="card">
@@ -246,6 +274,7 @@
     <div class="card" id="selectedGameCard" style="display:none">
       <h2>📊 <span id="selectedGameTitle">Выбранная игра</span></h2>
       <div class="chart-wrap"><canvas id="gameChart"></canvas></div>
+      <p class="stats-note" id="selectedGameUnusual"></p>
     </div>
   </div>
 
@@ -262,6 +291,11 @@
       <div class="chart-wrap" style="height:240px"><canvas id="deviationChart"></canvas></div>
     </div>
     <div id="extraStats" hidden>
+      <div class="card">
+        <h2>✨ Насколько необычной была партия?</h2>
+        <p class="stats-note">Сравниваем всё распределение сумм с 10 000 случайных партий такой же длины на двух честных кубиках. Чем меньше процент, тем необычнее результат. Это оценка случайных отклонений, а не проверка честности кубиков.</p>
+        <div class="record-grid" id="unusualGames"></div>
+      </div>
       <div class="card">
         <h2>📚 Партии в цифрах</h2>
         <div class="stat-row" id="gameLengthStats"></div>
@@ -308,6 +342,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/static/features.js"></script>
 <script>
 const PROBS = {2:1,3:2,4:3,5:4,6:5,7:6,8:5,9:4,10:3,11:2,12:1};
 const TOTAL_COMBOS = 36;
@@ -365,7 +400,7 @@ async function saveGame() {
   if (total === 0) { showToast('❌ Введи хотя бы один бросок!', false); return; }
   const winner = document.getElementById('winnerInput').value.trim();
   if (!winner) { showToast('❌ Укажи победителя!', false); return; }
-  const date = document.getElementById('dateInput').value || new Date().toISOString().split('T')[0];
+  const date = document.getElementById('dateInput').value || localDate();
   const players = parseInt(document.getElementById('playersInput').value);
 
   const btn = document.querySelector('.btn-primary');
@@ -477,6 +512,7 @@ function selectGame(i) {
   renderGamesList();
   const g = games[i];
   document.getElementById('selectedGameCard').style.display = 'block';
+  renderSelectedUnusual();
   document.getElementById('selectedGameTitle').textContent = `Игра #${i+1} · ${g.winner} · ${formatDate(g.date)}`;
   const labels = [2,3,4,5,6,7,8,9,10,11,12];
   const data = labels.map(n => g.rolls[n]||0);
@@ -739,13 +775,14 @@ function renderAll() {
   renderGamesList();
   renderTotalStats();
   renderWinners();
+  updateUnusualGames();
 }
 
 function showTab(name) {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => { if (t.getAttribute('onclick') === `showTab('${name}')`) t.classList.add('active'); });
 }
 
 function formatDate(d) {
@@ -764,7 +801,8 @@ function showToast(msg, ok=true) {
   setTimeout(()=>t.classList.remove('show'), 2800);
 }
 
-document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+document.getElementById('dateInput').value = localDate();
+initLiveGame();
 initDiceGrid();
 initProbGrid();
 loadGames();
