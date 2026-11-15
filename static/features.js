@@ -10,12 +10,12 @@ function liveCounts() {
   return counts;
 }
 function initLiveGame() {
+  document.getElementById('liveWinner').value='';
   document.getElementById('liveDate').value=localDate();
   try {
     const draft=JSON.parse(localStorage.getItem(LIVE_KEY));
     if(draft && Array.isArray(draft.sequence) && draft.sequence.every(n=>Number.isInteger(n)&&n>=2&&n<=12)) {
       liveSequence=draft.sequence;
-      if (['Папа','Мама','Софа','Максим'].includes(draft.winner)) document.getElementById('liveWinner').value=draft.winner;
       if ([2,3,4,5,6].includes(Number(draft.players))) document.getElementById('livePlayers').value=draft.players;
       if (/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) document.getElementById('liveDate').value=draft.date;
     }
@@ -24,7 +24,7 @@ function initLiveGame() {
 }
 function persistLiveGame() {
   try {
-    localStorage.setItem(LIVE_KEY,JSON.stringify({sequence:liveSequence,winner:document.getElementById('liveWinner').value,players:document.getElementById('livePlayers').value,date:document.getElementById('liveDate').value}));
+    localStorage.setItem(LIVE_KEY,JSON.stringify({sequence:liveSequence,players:document.getElementById('livePlayers').value,date:document.getElementById('liveDate').value}));
   } catch(e) { document.getElementById('liveDraftNote').textContent='Не удалось сохранить черновик на устройстве. Не закрывай страницу до сохранения игры.'; }
 }
 function addLiveRoll(n) { if(liveSaving) return; liveSequence.push(n); persistLiveGame(); renderLiveGame(); }
